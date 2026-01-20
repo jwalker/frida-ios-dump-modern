@@ -98,6 +98,7 @@ class ModernIOSDumper:
     def load_agent(self, session):
         """Load the dumper agent"""
         try:
+            # Use original agent (simple memory dump, no cryptid patching)
             script_path = Path(__file__).parent / "agent.js"
             with open(script_path, 'r') as f:
                 script_code = f.read()
@@ -273,6 +274,10 @@ class ModernIOSDumper:
             print(f"\n[+] Dump complete!")
             print(f"[+] Decrypted binaries: {success_count}/{len(modules)}")
             print(f"[+] Output: {output_dir}")
+
+            if success_count > 0:
+                print(f"\n[*] Binaries are ready for analysis (cryptid automatically set to 0)")
+                print(f"[*] Verify with: otool -l {output_dir}/Payload/<App>.app/<App> | grep cryptid")
 
             ssh.close()
             session.detach()
