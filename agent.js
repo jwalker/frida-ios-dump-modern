@@ -188,7 +188,12 @@ function dumpModule(modulePath) {
         console.log(`[*] Base: ${baseAddress}, Size: ${moduleSize} bytes`);
 
         // Read decrypted memory
-        const decryptedData = Memory.readByteArray(baseAddress, moduleSize);
+        // NOTE: Memory.readByteArray is undefined in Frida 17.5.2
+        // Use NativePointer.readByteArray instead
+        console.log(`[*] Reading memory...`);
+        const decryptedData = baseAddress.readByteArray(moduleSize);
+        console.log(`[*] Memory read complete`);
+
         if (!decryptedData) {
             console.log(`[!] Failed to read memory for ${modulePath}`);
             return null;
@@ -263,10 +268,41 @@ function getAppModules() {
     const processModules = Process.enumerateModules();
 
     if (!bundlePath && processModules.length > 0) {
-        // The main executable is typically the first module
-        const mainModule = processModules[0];
-        bundlePath = mainModule.path.substring(0, mainModule.path.lastIndexOf('/'));
-        console.log(`[*] Detected bundle path: ${bundlePath}`);
+        // Filter out jailbreak-related paths to find the actual app
+        const jailbreakPaths = [
+            '/cores/binpack/',     // palera1n
+            '/usr/lib/',           // System libraries
+            '/System/',            // System frameworks
+            '/Library/MobileSubstrate/',  // Substrate tweaks
+            '/Library/Frameworks/', // System frameworks
+            '/electra/',           // Electra jailbreak
+            '/chimera/',           // Chimera jailbreak
+            '/odyssey/',           // Odyssey jailbreak
+            '/taurine/'            // Taurine jailbreak (though this worked before)
+        ];
+
+        // Find the main app module (should be in /var/containers/Bundle/Application/ or /Applications/)
+        let mainModule = null;
+        for (const mod of processModules) {
+            const isJailbreakModule = jailbreakPaths.some(path => mod.path.startsWith(path));
+            if (!isJailbreakModule) {
+                mainModule = mod;
+                console.log(`[*] Found main module: ${mod.name} at ${mod.path}`);
+                break;
+            }
+        }
+
+        if (mainModule) {
+            bundlePath = mainModule.path.substring(0, mainModule.path.lastIndexOf('/'));
+            executablePath = mainModule.path;
+            console.log(`[*] Detected bundle path: ${bundlePath}`);
+        } else {
+            console.log(`[!] Could not find main app module - all modules appear to be jailbreak-related`);
+            // Last resort: use first module anyway
+            const firstModule = processModules[0];
+            bundlePath = firstModule.path.substring(0, firstModule.path.lastIndexOf('/'));
+            console.log(`[*] Using first module as fallback: ${bundlePath}`);
+        }
     }
 
     const modules = [];
